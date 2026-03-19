@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "research-proposal-cli"
+version = "0.1.0"
+description = "Generate academic research proposals for PhD applications"
+requires-python = ">=3.10"
+dependencies = [
+    "typer[all]>=0.15.0",
+    "rich>=13.0.0",
+    "questionary>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "reportlab>=4.0.0",
+    "arxiv>=2.0.0",
+    "pymed>=0.8.9",
+    "httpx[socks]>=0.27.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
+
+[project.scripts]
+proposal = "proposal.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/proposal"]
