@@ -1,3 +1,5 @@
+<img width="1750" height="1264" alt="image" src="https://github.com/user-attachments/assets/1184df85-82a7-40f1-a618-518af8f2a957" />
+
 # Research Proposal CLI
 
 Generate academic research proposals for PhD applications using AI.
