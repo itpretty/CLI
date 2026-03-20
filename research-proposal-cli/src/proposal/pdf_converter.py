@@ -71,9 +71,9 @@ def _register_fonts():
 
     from reportlab.lib.fonts import addMapping
 
-    # Font directory: sibling to scripts/ in the project root
+    # Font directory: sibling to this module inside the package
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    font_dir = os.path.join(os.path.dirname(script_dir), 'fonts')
+    font_dir = os.path.join(script_dir, 'fonts')
 
     font_files = {
         FONT:            os.path.join(font_dir, 'STIXTwoText-Regular.ttf'),

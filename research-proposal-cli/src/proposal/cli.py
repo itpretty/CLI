@@ -29,12 +29,17 @@ PHASES = [
 
 def _banner(skip_pdf: bool = False) -> None:
     from rich.table import Table
+    from rich.text import Text
 
-    console.print(Panel.fit(
-        "[bold blue]Research Proposal Generator[/bold blue]\n"
-        "Generate scientific research proposals with AI assistance",
-        border_style="blue",
-    ))
+    try:
+        import pyfiglet
+        logo = pyfiglet.figlet_format("VibeSci", font="slant")
+        console.print(Text(logo, style="bold blue"), end="")
+    except ImportError:
+        console.print("[bold blue]VibeSci[/bold blue]")
+
+    console.print("[dim italic]VibeSci - Research Proposal Generator by www.opensci.io[/dim italic]")
+    console.print()
 
     from rich.box import SIMPLE_HEAVY
 
@@ -116,14 +121,7 @@ def pdf(
     output_pdf: Optional[Path] = typer.Argument(None, help="Output PDF path"),
 ) -> None:
     """Convert a Markdown proposal to PDF."""
-    import sys
-    from proposal.config import SCRIPTS_DIR
-
-    scripts_dir = str(SCRIPTS_DIR)
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
-
-    from md_to_pdf import build_pdf
+    from proposal.pdf_converter import build_pdf
 
     out = str(output_pdf) if output_pdf else None
     build_pdf(str(input_md), out)

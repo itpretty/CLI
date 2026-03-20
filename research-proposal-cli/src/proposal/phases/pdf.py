@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import questionary
 from rich.console import Console
-
-from proposal.config import FONTS_DIR, SCRIPTS_DIR
 
 console = Console()
 
@@ -26,13 +23,7 @@ def convert_to_pdf(md_path: Path) -> Path | None:
     pdf_path = md_path.with_suffix(".pdf")
 
     try:
-        # Import the build_pdf function from our bundled script
-        # We need to add the scripts dir to sys.path temporarily
-        scripts_dir = str(SCRIPTS_DIR)
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
-
-        from md_to_pdf import build_pdf
+        from proposal.pdf_converter import build_pdf
         from proposal.ui import spinner
 
         with spinner("Converting to PDF..."):
@@ -41,7 +32,7 @@ def convert_to_pdf(md_path: Path) -> Path | None:
         return pdf_path
 
     except ImportError:
-        console.print("[yellow]PDF conversion script not found. Skipping.[/yellow]")
+        console.print("[yellow]PDF conversion module not found. Skipping.[/yellow]")
         return None
     except Exception as e:
         console.print(f"[red]PDF conversion error: {e}[/red]")

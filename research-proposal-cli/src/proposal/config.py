@@ -17,9 +17,9 @@ from pydantic_settings import BaseSettings
 
 load_dotenv()
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
-FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
+_PACKAGE_DIR = Path(__file__).resolve().parent
+TEMPLATES_DIR = _PACKAGE_DIR / "templates"
+FONTS_DIR = _PACKAGE_DIR / "fonts"
 
 
 class Domain(str, Enum):

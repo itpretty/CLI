@@ -1,6 +1,16 @@
+```
+ _    ___ __        _____      _
+| |  / (_) /_  ___ / ___/_____(_)
+| | / / / __ \/ _ \\__ \/ ___/ /
+| |/ / / /_/ /  __/__/ / /__/ /
+|___/_/_.___/\___/____/\___/_/
+
+VibeSci - Research Proposal Generator by www.opensci.io
+```
+
 # Research Proposal CLI
 
-Generate academic research proposals for PhD applications using AI.
+Generate academic research proposals using AI.
 
 ## Prerequisites
 
