@@ -1,14 +1,13 @@
-"""LLM client that uses the `claude` CLI as its backend.
+"""LLM client that dispatches to the selected AI agent CLI.
 
-Invokes `claude -p` (print mode) with the current logged-in session,
-so it works with Team/Pro subscriptions without needing API credits.
+Supports Claude Code, GitHub Copilot CLI, Cursor CLI, Aider,
+Open Interpreter, Codex CLI, and Cline — all via subprocess.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 from dataclasses import dataclass
 
@@ -46,175 +45,125 @@ class TokenUsage:
 # Global token tracker for the session
 usage = TokenUsage()
 
-_init_shown = False
-
-
-_claude_bin: str | None = None
-
-
-def _find_claude() -> str:
-    """Locate the claude CLI binary.
-
-    When running as a PyInstaller bundle, the inherited PATH may be minimal
-    (e.g. /usr/bin:/bin), so we also check common installation directories.
-    """
-    global _claude_bin
-    if _claude_bin:
-        return _claude_bin
-
-    # 1. Check PATH (works for normal installs and Terminal launches)
-    found = shutil.which("claude")
-    if found:
-        _claude_bin = found
-        return found
-
-    # 2. Check common locations for standalone / npm-installed claude
-    import pathlib
-    home = pathlib.Path.home()
-    candidates = [
-        home / ".local" / "bin" / "claude",
-        home / ".claude" / "local" / "claude",
-        home / ".npm-global" / "bin" / "claude",
-        pathlib.Path("/usr/local/bin/claude"),
-        pathlib.Path("/opt/homebrew/bin/claude"),
-    ]
-    for p in candidates:
-        if p.is_file() and os.access(p, os.X_OK):
-            _claude_bin = str(p)
-            return _claude_bin
-
-    # 3. Ask the shell for the full PATH
-    try:
-        result = subprocess.run(
-            ["/bin/zsh", "-lc", "which claude"],
-            capture_output=True, text=True, timeout=5,
-        )
-        path = result.stdout.strip()
-        if path and os.path.isfile(path):
-            _claude_bin = path
-            return _claude_bin
-    except Exception:
-        pass
-
-    return ""
-
-
-def _ensure_cli() -> None:
-    """Check that the claude CLI is available and print info on first use."""
-    global _init_shown
-    if not _find_claude():
-        console.print("[red]Error: 'claude' CLI not found on PATH.[/red]")
-        console.print("[dim]Install Claude Code: https://docs.anthropic.com/en/docs/claude-code[/dim]")
-        raise SystemExit(1)
-
-    if not _init_shown:
-        _init_shown = True
-        settings = get_settings()
-        console.print(
-            f"  Using Claude Code CLI, model: [bold]{settings.model}[/bold]"
-        )
+_SYSTEM_SUFFIX = (
+    "You are a text generation assistant. Respond ONLY with the requested content. "
+    "Do not use any tools. Do not explain or add commentary unless asked."
+)
 
 
 def _build_env() -> dict[str, str]:
-    """Build subprocess environment, stripping ANTHROPIC_API_KEY.
-
-    This forces `claude -p` to use the logged-in session (Team/Pro
-    subscription) instead of the API key which may have no credits.
-    """
+    """Build subprocess environment, stripping ANTHROPIC_API_KEY."""
     return {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
 
 
-def generate(
-    system_prompt: str,
-    user_prompt: str,
-    max_tokens: int | None = None,
-    stream: bool = False,
-) -> str:
-    """Call the claude CLI and return the assistant's text response."""
-    _ensure_cli()
-    settings = get_settings()
-
-    prompt = f"{system_prompt}\n\n---\n\n{user_prompt}"
-    env = _build_env()
-
-    if stream:
-        return _stream(prompt, settings.model, env)
-    return _run(prompt, settings.model, env)
+# ── Agent-specific command builders ──────────────────────────────────────
 
 
-def _run(prompt: str, model: str, env: dict) -> str:
-    """Non-streaming: run claude -p and parse JSON result."""
+def _cmd_claude(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    fmt = "stream-json" if stream else "json"
     cmd = [
-        _find_claude(),
-        "-p",
-        "--output-format", "json",
+        path, "-p",
+        "--output-format", fmt,
         "--model", model,
         "--no-session-persistence",
-        "--append-system-prompt",
-        "You are a text generation assistant. Respond ONLY with the requested content. "
-        "Do not use any tools. Do not explain or add commentary unless asked.",
+        "--append-system-prompt", _SYSTEM_SUFFIX,
         prompt,
     ]
+    if stream:
+        cmd.insert(2, "--verbose")
+    return cmd
 
+
+def _cmd_copilot(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    return [path, "-p", f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}"]
+
+
+def _cmd_cursor(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    cmd = [path, "-p", f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}"]
+    if model:
+        cmd.extend(["-m", model])
+    return cmd
+
+
+def _cmd_aider(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    return [
+        path,
+        "--chat-mode", "ask",
+        "--no-auto-commits",
+        "--yes",
+        "--no-stream",
+        "--message", f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}",
+    ]
+
+
+def _cmd_interpreter(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    return [path, "-y", f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}"]
+
+
+def _cmd_codex(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    cmd = [
+        path, "exec",
+        "--approval-mode", "never",
+        f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}",
+    ]
+    if model:
+        cmd.extend(["-m", model])
+    return cmd
+
+
+def _cmd_cline(path: str, prompt: str, model: str, stream: bool) -> list[str]:
+    return [path, "-y", f"{_SYSTEM_SUFFIX}\n\n---\n\n{prompt}"]
+
+
+_CMD_BUILDERS = {
+    "claude": _cmd_claude,
+    "copilot": _cmd_copilot,
+    "cursor-agent": _cmd_cursor,
+    "aider": _cmd_aider,
+    "interpreter": _cmd_interpreter,
+    "codex": _cmd_codex,
+    "cline": _cmd_cline,
+}
+
+
+# ── Response parsers ─────────────────────────────────────────────────────
+
+
+def _parse_claude_json(stdout: str) -> str:
+    """Parse Claude Code JSON response."""
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        console.print("[red]Claude Code CLI timed out after 5 minutes.[/red]")
-        return ""
-
-    if result.returncode != 0:
-        stderr = result.stderr.strip()
-        console.print(f"[red]Claude Code CLI error: {stderr or 'unknown error'}[/red]")
-        return ""
-
-    try:
-        data = json.loads(result.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError:
-        return result.stdout.strip()
-
+        return stdout.strip()
     if data.get("is_error"):
         console.print(f"[red]Claude Code error: {data.get('result', 'unknown')}[/red]")
         return ""
-
     _record_usage(data.get("usage", {}))
     return data.get("result", "")
 
 
-def _stream(prompt: str, model: str, env: dict) -> str:
-    """Streaming: run claude -p with stream-json and print chunks live."""
-    cmd = [
-        _find_claude(),
-        "-p",
-        "--verbose",
-        "--output-format", "stream-json",
-        "--model", model,
-        "--no-session-persistence",
-        "--append-system-prompt",
-        "You are a text generation assistant. Respond ONLY with the requested content. "
-        "Do not use any tools. Do not explain or add commentary unless asked.",
-        prompt,
-    ]
+def _parse_plain(stdout: str) -> str:
+    """Generic parser — just return stripped text."""
+    return stdout.strip()
 
+
+_PARSERS = {
+    "claude": _parse_claude_json,
+    "copilot": _parse_plain,
+    "cursor-agent": _parse_plain,
+    "aider": _parse_plain,
+    "interpreter": _parse_plain,
+    "codex": _parse_plain,
+    "cline": _parse_plain,
+}
+
+
+# ── Stream parsers ───────────────────────────────────────────────────────
+
+
+def _stream_claude(proc: subprocess.Popen) -> str:
+    """Parse Claude Code stream-json output."""
     collected = []
-
-    try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-        )
-    except OSError as e:
-        console.print(f"[red]Failed to start claude CLI: {e}[/red]")
-        return ""
-
     for line in proc.stdout:
         line = line.strip()
         if not line:
@@ -223,7 +172,6 @@ def _stream(prompt: str, model: str, env: dict) -> str:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-
         etype = event.get("type")
         if etype == "assistant" and "message" in event:
             for block in event["message"].get("content", []):
@@ -236,10 +184,106 @@ def _stream(prompt: str, model: str, env: dict) -> str:
             if result_text and not collected:
                 collected.append(result_text)
             _record_usage(event.get("usage", {}))
-
     proc.wait()
     console.print()
     return "".join(collected)
+
+
+def _stream_plain(proc: subprocess.Popen) -> str:
+    """Generic streaming — print lines as they arrive."""
+    collected = []
+    for line in proc.stdout:
+        console.print(line, end="", highlight=False)
+        collected.append(line)
+    proc.wait()
+    if collected and not collected[-1].endswith("\n"):
+        console.print()
+    return "".join(collected).strip()
+
+
+_STREAMERS = {
+    "claude": _stream_claude,
+    "copilot": _stream_plain,
+    "cursor-agent": _stream_plain,
+    "aider": _stream_plain,
+    "interpreter": _stream_plain,
+    "codex": _stream_plain,
+    "cline": _stream_plain,
+}
+
+
+# ── Public API ───────────────────────────────────────────────────────────
+
+
+def generate(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int | None = None,
+    stream: bool = False,
+) -> str:
+    """Call the selected AI agent CLI and return the response text."""
+    settings = get_settings()
+    agent = settings.agent
+    path = settings.agent_path
+
+    if not path:
+        console.print(f"[red]Error: No AI agent configured.[/red]")
+        raise SystemExit(1)
+
+    prompt = f"{system_prompt}\n\n---\n\n{user_prompt}"
+
+    builder = _CMD_BUILDERS.get(agent)
+    if not builder:
+        console.print(f"[red]Error: Unsupported agent '{agent}'[/red]")
+        raise SystemExit(1)
+
+    cmd = builder(path, prompt, settings.model, stream)
+    env = _build_env()
+
+    if stream:
+        return _run_stream(cmd, env, agent)
+    return _run_sync(cmd, env, agent)
+
+
+def _run_sync(cmd: list[str], env: dict, agent: str) -> str:
+    """Non-streaming execution."""
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        console.print("[red]Agent CLI timed out after 5 minutes.[/red]")
+        return ""
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        console.print(f"[red]Agent CLI error: {stderr or 'unknown error'}[/red]")
+        return ""
+
+    parser = _PARSERS.get(agent, _parse_plain)
+    return parser(result.stdout)
+
+
+def _run_stream(cmd: list[str], env: dict, agent: str) -> str:
+    """Streaming execution."""
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+    except OSError as e:
+        console.print(f"[red]Failed to start agent CLI: {e}[/red]")
+        return ""
+
+    streamer = _STREAMERS.get(agent, _stream_plain)
+    return streamer(proc)
 
 
 def _record_usage(u: dict) -> None:

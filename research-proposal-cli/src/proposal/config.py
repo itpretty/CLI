@@ -50,7 +50,9 @@ class Settings(BaseSettings):
     serpapi_key: str = Field(default="", alias="SERPAPI_KEY")
 
     # LLM settings
-    model: str = "sonnet"  # claude CLI model alias: sonnet, opus, haiku
+    agent: str = "claude"  # selected agent binary name
+    agent_path: str = ""  # resolved path to agent binary
+    model: str = "sonnet"  # model alias
     default_word_count: int = 3000
     default_language: Language = Language.ENGLISH
     default_domain: Domain = Domain.STEM

@@ -84,6 +84,7 @@ def generate(
     """Run the full 6-phase proposal generation pipeline."""
     import time
 
+    from proposal.agents import detect_agents, select_agent
     from proposal.config import get_settings
     from proposal.llm.client import usage
     from proposal.phases import literature, outline, output, pdf, requirements, writing
@@ -93,6 +94,27 @@ def generate(
 
     _banner(skip_pdf=skip_pdf)
     start_time = time.monotonic()
+
+    # Detect and select AI agent
+    available = detect_agents()
+    if not available:
+        console.print("[red]No supported AI agent CLI found on this machine.[/red]")
+        console.print()
+        console.print("[bold]Supported agents:[/bold]")
+        console.print("  • Claude Code    — npm i -g @anthropic-ai/claude-code")
+        console.print("  • Copilot CLI    — npm i -g @github/copilot")
+        console.print("  • Cursor CLI     — curl https://cursor.com/install | bash")
+        console.print("  • Aider          — pip install aider-chat")
+        console.print("  • Open Interpreter — pip install open-interpreter")
+        console.print("  • Codex CLI      — npm i -g @openai/codex")
+        console.print("  • Cline          — npm i -g cline")
+        raise typer.Exit(1)
+
+    agent = select_agent(available)
+    settings = get_settings()
+    settings.agent = agent.binary
+    settings.agent_path = agent.path
+    console.print()
 
     # Phase 1: Requirements
     reqs = requirements.gather_requirements(
