@@ -8,6 +8,7 @@
 VibeSci - Research Proposal Generator by www.opensci.io
 ```
 
+
 # Research Proposal CLI
 
 Generate academic research proposals using AI.
