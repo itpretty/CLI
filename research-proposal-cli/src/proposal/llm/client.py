@@ -49,10 +49,60 @@ usage = TokenUsage()
 _init_shown = False
 
 
+_claude_bin: str | None = None
+
+
+def _find_claude() -> str:
+    """Locate the claude CLI binary.
+
+    When running as a PyInstaller bundle, the inherited PATH may be minimal
+    (e.g. /usr/bin:/bin), so we also check common installation directories.
+    """
+    global _claude_bin
+    if _claude_bin:
+        return _claude_bin
+
+    # 1. Check PATH (works for normal installs and Terminal launches)
+    found = shutil.which("claude")
+    if found:
+        _claude_bin = found
+        return found
+
+    # 2. Check common locations for standalone / npm-installed claude
+    import pathlib
+    home = pathlib.Path.home()
+    candidates = [
+        home / ".local" / "bin" / "claude",
+        home / ".claude" / "local" / "claude",
+        home / ".npm-global" / "bin" / "claude",
+        pathlib.Path("/usr/local/bin/claude"),
+        pathlib.Path("/opt/homebrew/bin/claude"),
+    ]
+    for p in candidates:
+        if p.is_file() and os.access(p, os.X_OK):
+            _claude_bin = str(p)
+            return _claude_bin
+
+    # 3. Ask the shell for the full PATH
+    try:
+        result = subprocess.run(
+            ["/bin/zsh", "-lc", "which claude"],
+            capture_output=True, text=True, timeout=5,
+        )
+        path = result.stdout.strip()
+        if path and os.path.isfile(path):
+            _claude_bin = path
+            return _claude_bin
+    except Exception:
+        pass
+
+    return ""
+
+
 def _ensure_cli() -> None:
     """Check that the claude CLI is available and print info on first use."""
     global _init_shown
-    if not shutil.which("claude"):
+    if not _find_claude():
         console.print("[red]Error: 'claude' CLI not found on PATH.[/red]")
         console.print("[dim]Install Claude Code: https://docs.anthropic.com/en/docs/claude-code[/dim]")
         raise SystemExit(1)
@@ -95,7 +145,7 @@ def generate(
 def _run(prompt: str, model: str, env: dict) -> str:
     """Non-streaming: run claude -p and parse JSON result."""
     cmd = [
-        "claude",
+        _find_claude(),
         "-p",
         "--output-format", "json",
         "--model", model,
@@ -139,7 +189,7 @@ def _run(prompt: str, model: str, env: dict) -> str:
 def _stream(prompt: str, model: str, env: dict) -> str:
     """Streaming: run claude -p with stream-json and print chunks live."""
     cmd = [
-        "claude",
+        _find_claude(),
         "-p",
         "--verbose",
         "--output-format", "stream-json",

@@ -8,7 +8,6 @@
 VibeSci - Research Proposal Generator by www.opensci.io
 ```
 
-
 # Research Proposal CLI
 
 Generate academic research proposals using AI.
@@ -108,7 +107,25 @@ source ~/.zshrc
 proposal generate
 ```
 
-### Option 3: Build & share a wheel
+### Option 3: Standalone binary (no Python needed)
+
+Build a single `proposal` binary (~32 MB) that runs on any Mac without Python:
+
+```bash
+cd ~/Documents/research-proposal-cli
+./build.sh
+
+# Output: dist/proposal
+# Copy to PATH:
+cp dist/proposal /usr/local/bin/proposal
+
+# Run from anywhere:
+proposal generate
+```
+
+The only requirement on the target Mac is **Claude Code** (`claude` CLI installed and logged in).
+
+### Option 4: Build & share a wheel
 
 ```bash
 cd ~/Documents/research-proposal-cli

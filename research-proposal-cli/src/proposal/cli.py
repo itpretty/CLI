@@ -11,10 +11,25 @@ from rich.panel import Panel
 
 app = typer.Typer(
     name="proposal",
-    help="Generate academic research proposals for PhD applications.",
-    no_args_is_help=True,
+    help="Generate academic research proposals by AI",
+    invoke_without_command=True,
 )
 console = Console()
+
+
+@app.callback()
+def main(ctx: typer.Context) -> None:
+    """Generate academic research proposals by AI."""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(
+            generate,
+            topic=None,
+            domain=None,
+            language=None,
+            words=None,
+            skip_pdf=False,
+            model=None,
+        )
 
 
 PHASES = [

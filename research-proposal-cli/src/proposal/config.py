@@ -17,7 +17,16 @@ from pydantic_settings import BaseSettings
 
 load_dotenv()
 
-_PACKAGE_DIR = Path(__file__).resolve().parent
+def _get_package_dir() -> Path:
+    """Resolve the package directory, handling PyInstaller frozen bundles."""
+    import sys
+    if getattr(sys, 'frozen', False):
+        # Running as a PyInstaller bundle — data files are in sys._MEIPASS
+        return Path(sys._MEIPASS) / "proposal"
+    return Path(__file__).resolve().parent
+
+
+_PACKAGE_DIR = _get_package_dir()
 TEMPLATES_DIR = _PACKAGE_DIR / "templates"
 FONTS_DIR = _PACKAGE_DIR / "fonts"
 

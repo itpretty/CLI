@@ -72,8 +72,12 @@ def _register_fonts():
     from reportlab.lib.fonts import addMapping
 
     # Font directory: sibling to this module inside the package
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    font_dir = os.path.join(script_dir, 'fonts')
+    # When running as a PyInstaller bundle, use sys._MEIPASS
+    if getattr(sys, 'frozen', False):
+        base_dir_fonts = os.path.join(sys._MEIPASS, 'proposal')
+    else:
+        base_dir_fonts = os.path.dirname(os.path.abspath(__file__))
+    font_dir = os.path.join(base_dir_fonts, 'fonts')
 
     font_files = {
         FONT:            os.path.join(font_dir, 'STIXTwoText-Regular.ttf'),
